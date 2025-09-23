@@ -86,17 +86,41 @@ function draw() {
     surface.Draw();
 }
 
-function CreateSurfaceData()
-{
+function CreateSurfaceData() {
     let vertexList = [];
 
-    for (let i=0; i<360; i+=5) {
-        vertexList.push( Math.sin(deg2rad(i)), 1, Math.cos(deg2rad(i)) );
-        vertexList.push( Math.sin(deg2rad(i)), 0, Math.cos(deg2rad(i)) );
-    }
+    let R = 1;      
+    let a = 0.24;    
+    let n = window.n || 6;     
+    let step = window.step || 5;     
+    
+    for (let vDeg = 0; vDeg <= 90; vDeg += step) { 
+        let v = deg2rad(vDeg) ;
+        for (let uDeg = 0; uDeg <= 360; uDeg += step) {
+            let u = deg2rad(uDeg) ;
 
+            let x = (R * Math.cos(v) + a*(1 - Math.sin(v)) * Math.cos(n * u)) * Math.cos(u);
+            let y = (R * Math.cos(v) + a*(1 - Math.sin(v)) * Math.cos(n * u)) * Math.sin(u);
+            let z =  R * Math.sin(v);
+
+            vertexList.push(x, y, z);
+        }
+    }
+    for (let uDeg1 = 0; uDeg1 <= 360; uDeg1 += step) { 
+        let u = deg2rad(uDeg1) ;
+        for (let vDeg1 = 0; vDeg1 <= 90; vDeg1 += step) {
+            let v = deg2rad(vDeg1) ;
+
+            let x = (R * Math.cos(v) + a*(1 - Math.sin(v)) * Math.cos(n * u)) * Math.cos(u);
+            let y = (R * Math.cos(v) + a*(1 - Math.sin(v)) * Math.cos(n * u)) * Math.sin(u);
+            let z =  R * Math.sin(v);
+
+            vertexList.push(x, y, z);
+        }
+    }
     return vertexList;
 }
+
 
 
 /* Initialize the WebGL context. Called from init() */

@@ -1,11 +1,95 @@
 <!DOCTYPE html>
-<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-
-
-<title>PA#1</title>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>PA#1 – 3D Surface</title>
 <style>
     body {
-        background-color: #EEEEEE;
+        margin: 0;
+        font-family: "Segoe UI", Roboto, Arial, sans-serif;
+        background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+        color: #f5f5f5;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        height: 100vh;
+    }
+
+    h2 {
+        margin-top: 20px;
+        font-size: 28px;
+        letter-spacing: 1px;
+        text-align: center;
+        color: #00e5ff;
+        text-shadow: 0 0 10px rgba(0, 229, 255, 0.6);
+    }
+
+    #message {
+        margin: 10px 0 20px;
+        text-align: center;
+        font-size: 16px;
+        color: #ddd;
+    }
+
+    #controls {
+        margin: 10px 0 15px;
+        padding: 12px 18px;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 10px;
+        display: flex;
+        gap: 15px;
+        align-items: center;
+    }
+
+    #controls label {
+        font-size: 15px;
+        margin-right: 5px;
+    }
+
+    #controls input {
+        width: 60px;
+        padding: 5px;
+        border-radius: 6px;
+        border: none;
+        text-align: center;
+        font-size: 15px;
+    }
+
+    #controls button {
+        padding: 6px 14px;
+        border-radius: 6px;
+        border: none;
+        cursor: pointer;
+        background: #00e5ff;
+        color: #111;
+        font-weight: bold;
+        transition: background 0.3s ease;
+    }
+
+    #controls button:hover {
+        background: #00bcd4;
+    }
+
+    #canvas-holder {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-grow: 1;
+        width: 100%;
+    }
+
+    canvas {
+        background-color: #111;
+        border-radius: 12px;
+        box-shadow: 0 8px 25px rgba(0,0,0,0.6);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    canvas:hover {
+        transform: scale(1.02);
+        box-shadow: 0 12px 35px rgba(0,0,0,0.9);
     }
 </style>
 
@@ -13,19 +97,41 @@
 <script src="./Utils/m4.js"></script>
 <script src="./shader.gpu"></script>
 <script src="./main.js"></script>
+<script>
+    function updateSurface() {
+        // зчитуємо значення з input
+        let n = parseInt(document.getElementById("nValue").value);
+        let step = parseInt(document.getElementById("stepValue").value);
 
+        // оновлюємо глобальні параметри
+        window.n = n;
+        window.step = step;
+
+        // перебудовуємо поверхню
+        surface.BufferData(CreateSurfaceData());
+        draw();
+    }
+</script>
 </head>
 <body onload="init()">
 
-<h2>A Cube with "Trackball" Mouse Rotation</h2>
+    <h2>Interactive 3D Surface</h2>
+    <p id="message">Drag your mouse to rotate the object.<br>
+    On touch devices, use your finger.</p>
 
-<p id="message">Drag your mouse on the cube to rotate it.<br>
-(On a touch screen, you can use your finger.)</p>
+    <div id="controls">
+        <label for="nValue">n:</label>
+        <input type="number" id="nValue" value="6" min="1" max="50">
 
+        <label for="stepValue">step:</label>
+        <input type="number" id="stepValue" value="5" min="1" max="45">
 
-<div id="canvas-holder">
-   <canvas width="600" height="600" id="webglcanvas" style="background-color:red"></canvas>
-</div>
+        <button onclick="updateSurface()">Update</button>
+    </div>
 
+    <div id="canvas-holder">
+       <canvas width="600" height="600" id="webglcanvas"></canvas>
+    </div>
 
-</body></html>
+</body>
+</html>
