@@ -1,205 +1,261 @@
-'use strict';
+'use strict'; 
 
-let gl;                         // The webgl context.
-let surface;                    // A surface model
-let shProgram;                  // A shader program
-let spaceball;                  // A SimpleRotator object that lets the user rotate the view by mouse.
+let gl;
+let surface;
+let shProgram;
+let spaceball;
+let canvasGlobal;
+let zoom = -5;
+let lightSphere;
 
-function deg2rad(angle) {
-    return angle * Math.PI / 180;
-}
+let projectionMatrix = m4.identity();
+let modelMatrix = m4.identity();
+let viewMatrix = m4.identity();
+let normalMatrix4 = m4.identity();
+let inverseViewMatrix = m4.identity();
+let zoomMatrix = m4.identity();
+let lightModelMatrix = m4.identity();
 
+let lightPos = new Float32Array(3);
+let viewPos_WorldSpace = new Float32Array(3);
+let normalMatrix = new Float32Array(9);
+let lightNormalMatrix = new Float32Array([1, 0, 0, 0, 1, 0, 0, 0, 1]);
 
-// Constructor
-function Model(name) {
-    this.name = name;
-    this.iVertexBuffer = gl.createBuffer();
-    this.count = 0;
-
-    this.BufferData = function(vertices) {
-
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.iVertexBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STREAM_DRAW);
-
-        this.count = vertices.length/3;
-    }
-
-    this.Draw = function() {
-
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.iVertexBuffer);
-        gl.vertexAttribPointer(shProgram.iAttribVertex, 3, gl.FLOAT, false, 0, 0);
-        gl.enableVertexAttribArray(shProgram.iAttribVertex);
-   
-        gl.drawArrays(gl.LINE_STRIP, 0, this.count);
-    }
-}
-
-
-// Constructor
 function ShaderProgram(name, program) {
-
     this.name = name;
     this.prog = program;
-
-    // Location of the attribute variable in the shader program.
+    
     this.iAttribVertex = -1;
-    // Location of the uniform specifying a color for the primitive.
-    this.iColor = -1;
-    // Location of the uniform matrix representing the combined transformation.
-    this.iModelViewProjectionMatrix = -1;
+    this.iAttribNormal = -1;
+    this.iModelMatrix = -1;
+    this.iViewMatrix = -1;
+    this.iProjectionMatrix = -1;
+    this.iNormalMatrix = -1;
+    this.uLightPosition = -1;
+    this.uViewPosition = -1;
+    this.uAmbientColor = -1;
+    this.uDiffuseColor = -1;
+    this.uSpecularColor = -1;
+    this.uShininess = -1;
+    this.uIsLight = -1;
 
     this.Use = function() {
         gl.useProgram(this.prog);
     }
 }
 
+function resizeCanvasToDisplaySize(canvas) {
+    const displayWidth = canvas.clientWidth;
+    const displayHeight = canvas.clientHeight;
+    if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
+        canvas.width = displayWidth;
+        canvas.height = displayHeight;
+        return true;
+    }
+    return false;
+}
 
-/* Draws a colored cube, along with a set of coordinate axes.
- * (Note that the use of the above drawPrimitive function is not an efficient
- * way to draw with WebGL.  Here, the geometry is so simple that it doesn't matter.)
- */
-function draw() { 
-    gl.clearColor(0,0,0,1);
+function draw() {
+    const resized = resizeCanvasToDisplaySize(canvasGlobal);
+    if (resized) {
+        gl.viewport(0, 0, canvasGlobal.width, canvasGlobal.height);
+        projectionMatrix = m4.perspective(Math.PI / 6, canvasGlobal.width / canvasGlobal.height, 0.1, 100);
+    }
+
+    gl.clearColor(0.02, 0.02, 0.02, 1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    
-    /* Set the values of the projection transformation */
-    let projection = m4.perspective(Math.PI/8, 1, 8, 12); 
-    
-    /* Get the view matrix from the SimpleRotator object.*/
-    let modelView = spaceball.getViewMatrix();
 
-    let rotateToPointZero = m4.axisRotation([0.707,0.707,0], 0.7);
-    let translateToPointZero = m4.translation(0,0,-10);
+    const lightModeValue = document.querySelector('input[name="lightMode"]:checked').value;
+    const isLightStatic = (lightModeValue === "static");
 
-    let matAccum0 = m4.multiply(rotateToPointZero, modelView );
-    let matAccum1 = m4.multiply(translateToPointZero, matAccum0 );
-        
-    /* Multiply the projection matrix times the modelview matrix to give the
-       combined transformation matrix, and send that to the shader program. */
-    let modelViewProjection = m4.multiply(projection, matAccum1 );
+    if (isLightStatic) {
 
-    gl.uniformMatrix4fv(shProgram.iModelViewProjectionMatrix, false, modelViewProjection );
+        lightPos[0] = 8;
+        lightPos[1] = 4;
+        lightPos[2] = 0;
+    } else {
+
+        let t = performance.now() * 0.001;
+        let lightRadius = 8;
+        lightPos[0] = lightRadius * Math.cos(t);
+        lightPos[1] = 4;
+        lightPos[2] = lightRadius * Math.sin(t);
+    }
     
-    /* Draw the six faces of a cube, with different colors. */
-    gl.uniform4fv(shProgram.iColor, [1,1,0,1] );
+    viewMatrix = m4.translation(0, 0, zoom);
+    modelMatrix = spaceball.getViewMatrix();
+    normalMatrix4 = m4.transpose(m4.inverse(modelMatrix));
+    
+    normalMatrix[0] = normalMatrix4[0];
+    normalMatrix[1] = normalMatrix4[1];
+    normalMatrix[2] = normalMatrix4[2];
+    normalMatrix[3] = normalMatrix4[4];
+    normalMatrix[4] = normalMatrix4[5];
+    normalMatrix[5] = normalMatrix4[6];
+    normalMatrix[6] = normalMatrix4[8];
+    normalMatrix[7] = normalMatrix4[9];
+    normalMatrix[8] = normalMatrix4[10];
+
+    inverseViewMatrix = m4.inverse(viewMatrix);
+    viewPos_WorldSpace[0] = inverseViewMatrix[12];
+    viewPos_WorldSpace[1] = inverseViewMatrix[13];
+    viewPos_WorldSpace[2] = inverseViewMatrix[14];
+
+    shProgram.Use();
+    
+    gl.uniformMatrix4fv(shProgram.iModelMatrix, false, modelMatrix);
+    gl.uniformMatrix4fv(shProgram.iViewMatrix, false, viewMatrix);
+    gl.uniformMatrix4fv(shProgram.iProjectionMatrix, false, projectionMatrix);
+    gl.uniformMatrix3fv(shProgram.iNormalMatrix, false, normalMatrix);
+    
+    gl.uniform3fv(shProgram.uLightPosition, lightPos);
+    gl.uniform3fv(shProgram.uViewPosition, viewPos_WorldSpace);
+    gl.uniform3fv(shProgram.uAmbientColor, [0.1, 0.1, 0.1]);
+    gl.uniform3fv(shProgram.uDiffuseColor, [1, 1, 1]);
+    gl.uniform3fv(shProgram.uSpecularColor, [1, 1, 1]);
+    gl.uniform1f(shProgram.uShininess, 32.0);
+    gl.uniform1i(shProgram.uIsLight, 0);
 
     surface.Draw();
-}
 
-function CreateSurfaceData() {
-    let vertexList = [];
-
-    let R = 1;      
-    let a = 0.24;    
-    let n = window.n || 6;     
-    let step = window.step || 5;     
+    lightModelMatrix = m4.translation(lightPos[0], lightPos[1], lightPos[2]);
+    gl.uniformMatrix4fv(shProgram.iModelMatrix, false, lightModelMatrix);
+    gl.uniformMatrix3fv(shProgram.iNormalMatrix, false, lightNormalMatrix);
+    gl.uniform1i(shProgram.uIsLight, 1);
     
-    for (let vDeg = 0; vDeg <= 90; vDeg += step) { 
-        let v = deg2rad(vDeg) ;
-        for (let uDeg = 0; uDeg <= 360; uDeg += step) {
-            let u = deg2rad(uDeg) ;
+    lightSphere.Draw();
 
-            let x = (R * Math.cos(v) + a*(1 - Math.sin(v)) * Math.cos(n * u)) * Math.cos(u);
-            let y = (R * Math.cos(v) + a*(1 - Math.sin(v)) * Math.cos(n * u)) * Math.sin(u);
-            let z =  R * Math.sin(v);
-
-            vertexList.push(x, y, z);
-        }
-    }
-    for (let uDeg1 = 0; uDeg1 <= 360; uDeg1 += step) { 
-        let u = deg2rad(uDeg1) ;
-        for (let vDeg1 = 0; vDeg1 <= 90; vDeg1 += step) {
-            let v = deg2rad(vDeg1) ;
-
-            let x = (R * Math.cos(v) + a*(1 - Math.sin(v)) * Math.cos(n * u)) * Math.cos(u);
-            let y = (R * Math.cos(v) + a*(1 - Math.sin(v)) * Math.cos(n * u)) * Math.sin(u);
-            let z =  R * Math.sin(v);
-
-            vertexList.push(x, y, z);
-        }
-    }
-    return vertexList;
+    requestAnimationFrame(draw);
 }
 
-
-
-/* Initialize the WebGL context. Called from init() */
 function initGL() {
-    let prog = createProgram( gl, vertexShaderSource, fragmentShaderSource );
-
-    shProgram = new ShaderProgram('Basic', prog);
+    let prog = createProgram(gl, vertexShaderSource, fragmentShaderSource);
+    shProgram = new ShaderProgram('Phong', prog);
     shProgram.Use();
 
-    shProgram.iAttribVertex              = gl.getAttribLocation(prog, "vertex");
-    shProgram.iModelViewProjectionMatrix = gl.getUniformLocation(prog, "ModelViewProjectionMatrix");
-    shProgram.iColor                     = gl.getUniformLocation(prog, "color");
+    shProgram.iAttribVertex = gl.getAttribLocation(prog, "vertex");
+    shProgram.iAttribNormal = gl.getAttribLocation(prog, "normal");
+    shProgram.iModelMatrix = gl.getUniformLocation(prog, "ModelMatrix");
+    shProgram.iViewMatrix = gl.getUniformLocation(prog, "ViewMatrix");
+    shProgram.iProjectionMatrix = gl.getUniformLocation(prog, "ProjectionMatrix");
+    shProgram.iNormalMatrix = gl.getUniformLocation(prog, "NormalMatrix");
+    shProgram.uLightPosition = gl.getUniformLocation(prog, "uLightPosition");
+    shProgram.uViewPosition = gl.getUniformLocation(prog, "uViewPosition");
+    shProgram.uAmbientColor = gl.getUniformLocation(prog, "uAmbientColor");
+    shProgram.uDiffuseColor = gl.getUniformLocation(prog, "uDiffuseColor");
+    shProgram.uSpecularColor = gl.getUniformLocation(prog, "uSpecularColor");
+    shProgram.uShininess = gl.getUniformLocation(prog, "uShininess");
+    shProgram.uIsLight = gl.getUniformLocation(prog, "uIsLight");
 
     surface = new Model('Surface');
-    surface.BufferData(CreateSurfaceData());
+    updateSurfaceData();
+
+    lightSphere = new Model('LightSphere');
+    let sphereData = createSphere(0.3, 12, 8);
+    lightSphere.BufferData(sphereData.verts, sphereData.normals, sphereData.indices);
 
     gl.enable(gl.DEPTH_TEST);
+    
+    resizeCanvasToDisplaySize(canvasGlobal);
+    gl.viewport(0, 0, canvasGlobal.width, canvasGlobal.height);
+    projectionMatrix = m4.perspective(Math.PI / 6, canvasGlobal.width / canvasGlobal.height, 0.1, 100);
 }
 
-
-/* Creates a program for use in the WebGL context gl, and returns the
- * identifier for that program.  If an error occurs while compiling or
- * linking the program, an exception of type Error is thrown.  The error
- * string contains the compilation or linking error.  If no error occurs,
- * the program identifier is the return value of the function.
- * The second and third parameters are strings that contain the
- * source code for the vertex shader and for the fragment shader.
- */
 function createProgram(gl, vShader, fShader) {
-    let vsh = gl.createShader( gl.VERTEX_SHADER );
-    gl.shaderSource(vsh,vShader);
+    let vsh = gl.createShader(gl.VERTEX_SHADER);
+    gl.shaderSource(vsh, vShader);
     gl.compileShader(vsh);
-    if ( ! gl.getShaderParameter(vsh, gl.COMPILE_STATUS) ) {
-        throw new Error("Error in vertex shader:  " + gl.getShaderInfoLog(vsh));
-     }
-    let fsh = gl.createShader( gl.FRAGMENT_SHADER );
+    if (!gl.getShaderParameter(vsh, gl.COMPILE_STATUS)) {
+        throw new Error("Error in vertex shader: " + gl.getShaderInfoLog(vsh));
+    }
+
+    let fsh = gl.createShader(gl.FRAGMENT_SHADER);
     gl.shaderSource(fsh, fShader);
     gl.compileShader(fsh);
-    if ( ! gl.getShaderParameter(fsh, gl.COMPILE_STATUS) ) {
-       throw new Error("Error in fragment shader:  " + gl.getShaderInfoLog(fsh));
+    if (!gl.getShaderParameter(fsh, gl.COMPILE_STATUS)) {
+        throw new Error("Error in fragment shader: " + gl.getShaderInfoLog(fsh));
     }
+
     let prog = gl.createProgram();
-    gl.attachShader(prog,vsh);
+    gl.attachShader(prog, vsh);
     gl.attachShader(prog, fsh);
     gl.linkProgram(prog);
-    if ( ! gl.getProgramParameter( prog, gl.LINK_STATUS) ) {
-       throw new Error("Link error in program:  " + gl.getProgramInfoLog(prog));
+
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+        throw new Error("Link error in program: " + gl.getProgramInfoLog(prog));
     }
     return prog;
 }
 
+function createSphere(radius, lats, longs) {
+    let vertices = [];
+    let normals = [];
+    let indices = [];
 
-/**
- * initialization function that will be called when the page has loaded
- */
-function init() {
-    let canvas;
-    try {
-        canvas = document.getElementById("webglcanvas");
-        gl = canvas.getContext("webgl");
-        if ( ! gl ) {
-            throw "Browser does not support WebGL";
+    for (let i = 0; i <= lats; i++) {
+        let lat = Math.PI * (-0.5 + i / lats);
+        let sinLat = Math.sin(lat);
+        let cosLat = Math.cos(lat);
+
+        for (let j = 0; j <= longs; j++) {
+            let lon = 2 * Math.PI * j / longs;
+            let sinLon = Math.sin(lon);
+            let cosLon = Math.cos(lon);
+
+            let x = cosLon * cosLat;
+            let y = sinLon * cosLat;
+            let z = sinLat;
+
+            vertices.push(x * radius, y * radius, z * radius);
+            normals.push(x, y, z);
         }
     }
-    catch (e) {
-        document.getElementById("canvas-holder").innerHTML =
-            "<p>Sorry, could not get a WebGL graphics context.</p>";
-        return;
+
+    for (let i = 0; i < lats; i++) {
+        for (let j = 0; j < longs; j++) {
+            let first = (i * (longs + 1)) + j;
+            let second = first + longs + 1;
+
+            indices.push(first, second, first + 1);
+            indices.push(second, second + 1, first + 1);
+        }
     }
-    try {
-        initGL();  // initialize the WebGL graphics context
-    }
-    catch (e) {
-        document.getElementById("canvas-holder").innerHTML =
-            "<p>Sorry, could not initialize the WebGL graphics context: " + e + "</p>";
+
+    return { verts: vertices, normals: normals, indices: indices };
+}
+
+function updateSurfaceData() {
+    let n = parseInt(document.getElementById("nValue").value);
+    let uSteps = parseInt(document.getElementById("uSteps").value);
+    let vSteps = parseInt(document.getElementById("vSteps").value);
+    
+    let data = CreateSurfaceData(n, uSteps, vSteps);
+    let indices = generateIndices(uSteps, vSteps);
+    
+    surface.BufferData(data.vertices, data.normals, indices);
+}
+
+function updateSurface() {
+    updateSurfaceData();
+}
+
+
+function init() {
+    canvasGlobal = document.getElementById("webglcanvas");
+    gl = canvasGlobal.getContext("webgl");
+    if (!gl) {
+        alert("Browser does not support WebGL");
         return;
     }
 
-    spaceball = new TrackballRotator(canvas, draw, 0);
+    initGL();
+    spaceball = new TrackballRotator(canvasGlobal, draw, 0);
+
+    canvasGlobal.addEventListener("wheel", function(event) {
+        event.preventDefault();
+        zoom += event.deltaY * 0.01;
+        zoom = Math.min(-2, Math.max(-400, zoom));
+    });
 
     draw();
 }
