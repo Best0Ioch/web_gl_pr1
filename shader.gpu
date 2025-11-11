@@ -1,6 +1,8 @@
 const vertexShaderSource = `
 attribute vec3 vertex;
 attribute vec3 normal;
+attribute vec2 texCoord;
+attribute vec3 tangent;
 
 uniform mat4 ModelMatrix;
 uniform mat4 ViewMatrix;
@@ -9,13 +11,24 @@ uniform mat3 NormalMatrix;
 
 varying vec3 vNormal;
 varying vec3 vWorldPos;
+varying vec2 vTexCoord;
+varying vec3 vTangent;
+varying vec3 vBitangent;
 
 void main() {
     vec4 worldPos = ModelMatrix * vec4(vertex, 1.0);
     vWorldPos = worldPos.xyz;
     
-    // Передаємо нормаль у простір камери
-    vNormal = normalize(NormalMatrix * normal);
+    // Gram-Schmidt orthogonalization 
+    vec3 T = normalize(NormalMatrix * tangent);
+    vec3 N = normalize(NormalMatrix * normal);
+    T = normalize(T - dot(T, N) * N);
+    vec3 B = cross(N, T);
+    
+    vNormal = N;
+    vTangent = T;
+    vBitangent = B;
+    vTexCoord = texCoord;
     
     gl_Position = ProjectionMatrix * ViewMatrix * worldPos;
 }
@@ -31,21 +44,30 @@ precision mediump float;
 
 varying vec3 vNormal;
 varying vec3 vWorldPos;
+varying vec2 vTexCoord;
+varying vec3 vTangent;
+varying vec3 vBitangent;
 
 uniform vec3 uLightPosition;
 uniform vec3 uViewPosition;
 uniform vec3 uAmbientColor;
-uniform vec3 uDiffuseColor;
-uniform vec3 uSpecularColor;
 uniform float uShininess;
 uniform bool uIsLight;
+
+// Текстури
+uniform sampler2D uDiffuseTexture;
+uniform sampler2D uSpecularTexture;
+uniform sampler2D uNormalTexture;
 
 void main() {
     if (uIsLight) {
         gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
     } else {
-        // Обчислюємо освітлення для кожного фрагмента
-        vec3 N = normalize(vNormal);
+        // Normal mapping
+        vec3 normalMap = texture2D(uNormalTexture, vTexCoord).rgb * 2.0 - 1.0;
+        mat3 TBN = mat3(vTangent, vBitangent, vNormal);
+        vec3 N = normalize(TBN * normalMap);
+        
         vec3 L = normalize(uLightPosition - vWorldPos);
         vec3 V = normalize(uViewPosition - vWorldPos);
         vec3 R = reflect(-L, N);
@@ -53,16 +75,18 @@ void main() {
         // Ambient
         vec3 ambient = uAmbientColor;
         
-        // Diffuse
+        // Diffuse 
+        vec3 diffuseColor = texture2D(uDiffuseTexture, vTexCoord).rgb;
         float diff = max(dot(N, L), 0.0);
-        vec3 diffuse = uDiffuseColor * diff;
+        vec3 diffuse = diffuseColor * diff;
         
-        // Specular
+        // Specular 
+        float specularStrength = 1.0 - texture2D(uSpecularTexture, vTexCoord).r;
         float spec = 0.0;
         if (diff > 0.0) {
             spec = pow(max(dot(V, R), 0.0), uShininess);
         }
-        vec3 specular = uSpecularColor * spec;
+        vec3 specular = vec3(specularStrength) * spec;
         
         vec3 color = ambient + diffuse + specular;
         gl_FragColor = vec4(color, 1.0);

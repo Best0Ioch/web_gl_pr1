@@ -6,17 +6,25 @@ function Model(name) {
     this.name = name;
     this.iVertexBuffer = gl.createBuffer();
     this.iNormalBuffer = gl.createBuffer();
+    this.iTexCoordBuffer = gl.createBuffer();
+    this.iTangentBuffer = gl.createBuffer();
     this.iIndexBuffer = gl.createBuffer();
     this.count = 0;
     this.indexCount = 0;
 
-    this.BufferData = function(vertices, normals, indices) {
+    this.BufferData = function(vertices, normals, texCoords, tangents, indices) {
         gl.bindBuffer(gl.ARRAY_BUFFER, this.iVertexBuffer);
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
         this.count = vertices.length / 3;
 
         gl.bindBuffer(gl.ARRAY_BUFFER, this.iNormalBuffer);
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normals), gl.STATIC_DRAW);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.iTexCoordBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(texCoords), gl.STATIC_DRAW);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.iTangentBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(tangents), gl.STATIC_DRAW);
 
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.iIndexBuffer);
         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
@@ -31,6 +39,14 @@ function Model(name) {
         gl.bindBuffer(gl.ARRAY_BUFFER, this.iNormalBuffer);
         gl.vertexAttribPointer(shProgram.iAttribNormal, 3, gl.FLOAT, false, 0, 0);
         gl.enableVertexAttribArray(shProgram.iAttribNormal);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.iTexCoordBuffer);
+        gl.vertexAttribPointer(shProgram.iAttribTexCoord, 2, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(shProgram.iAttribTexCoord);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.iTangentBuffer);
+        gl.vertexAttribPointer(shProgram.iAttribTangent, 3, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(shProgram.iAttribTangent);
 
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.iIndexBuffer);
         gl.drawElements(gl.TRIANGLES, this.indexCount, gl.UNSIGNED_SHORT, 0);
@@ -56,6 +72,8 @@ function generateIndices(uSteps, vSteps) {
 function CreateSurfaceData(n = 6, uSteps = 50, vSteps = 50) {
     let vertices = [];
     let normals = [];
+    let texCoords = [];
+    let tangents = [];
     
     let R = 1;
     let a = 0.24;
@@ -70,6 +88,7 @@ function CreateSurfaceData(n = 6, uSteps = 50, vSteps = 50) {
             let z = R * Math.sin(v);
             
             vertices.push(x, y, z);
+            texCoords.push(j / uSteps, i / vSteps);
             
             let dx_du = -(R * Math.cos(v) + a * (1 - Math.sin(v)) * Math.cos(n * u)) * Math.sin(u)
                        - a * (1 - Math.sin(v)) * n * Math.sin(n * u) * Math.cos(u);
@@ -95,11 +114,20 @@ function CreateSurfaceData(n = 6, uSteps = 50, vSteps = 50) {
             }
             
             normals.push(normal_x, normal_y, normal_z);
+            
+            let tangentLength = Math.sqrt(dx_du * dx_du + dy_du * dy_du + dz_du * dz_du);
+            if (tangentLength > 0) {
+                tangents.push(dx_du / tangentLength, dy_du / tangentLength, dz_du / tangentLength);
+            } else {
+                tangents.push(1, 0, 0);
+            }
         }
     }
 
     return {
         vertices: vertices,
-        normals: normals
+        normals: normals,
+        texCoords: texCoords,
+        tangents: tangents
     };
 }

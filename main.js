@@ -21,12 +21,17 @@ let viewPos_WorldSpace = new Float32Array(3);
 let normalMatrix = new Float32Array(9);
 let lightNormalMatrix = new Float32Array([1, 0, 0, 0, 1, 0, 0, 0, 1]);
 
+// Текстури
+let diffuseTexture, specularTexture, normalTexture;
+
 function ShaderProgram(name, program) {
     this.name = name;
     this.prog = program;
     
     this.iAttribVertex = -1;
     this.iAttribNormal = -1;
+    this.iAttribTexCoord = -1;
+    this.iAttribTangent = -1;
     this.iModelMatrix = -1;
     this.iViewMatrix = -1;
     this.iProjectionMatrix = -1;
@@ -34,14 +39,53 @@ function ShaderProgram(name, program) {
     this.uLightPosition = -1;
     this.uViewPosition = -1;
     this.uAmbientColor = -1;
-    this.uDiffuseColor = -1;
-    this.uSpecularColor = -1;
     this.uShininess = -1;
     this.uIsLight = -1;
+    this.uDiffuseTexture = -1;
+    this.uSpecularTexture = -1;
+    this.uNormalTexture = -1;
 
     this.Use = function() {
         gl.useProgram(this.prog);
     }
+}
+
+function loadTexture(url) {
+    return new Promise((resolve, reject) => {
+        const texture = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        
+        const level = 0;
+        const internalFormat = gl.RGBA;
+        const width = 1;
+        const height = 1;
+        const border = 0;
+        const srcFormat = gl.RGBA;
+        const srcType = gl.UNSIGNED_BYTE;
+        const pixel = new Uint8Array([255, 255, 255, 255]);
+        gl.texImage2D(gl.TEXTURE_2D, level, internalFormat, width, height, border, srcFormat, srcType, pixel);
+
+        const image = new Image();
+        image.onload = function() {
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+            gl.texImage2D(gl.TEXTURE_2D, level, internalFormat, srcFormat, srcType, image);
+            
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            
+            resolve(texture);
+        };
+        image.onerror = reject;
+        image.src = url;
+    });
+}
+
+async function loadTextures() {
+    diffuseTexture = await loadTexture('Utils/textures/diffuse.jpg');
+    specularTexture = await loadTexture('Utils/textures/specular.jpg');
+    normalTexture = await loadTexture('Utils/textures/normal.jpg');
 }
 
 function resizeCanvasToDisplaySize(canvas) {
@@ -69,12 +113,10 @@ function draw() {
     const isLightStatic = (lightModeValue === "static");
 
     if (isLightStatic) {
-
         lightPos[0] = 8;
         lightPos[1] = 4;
         lightPos[2] = 0;
     } else {
-
         let t = performance.now() * 0.001;
         let lightRadius = 8;
         lightPos[0] = lightRadius * Math.cos(t);
@@ -111,10 +153,21 @@ function draw() {
     gl.uniform3fv(shProgram.uLightPosition, lightPos);
     gl.uniform3fv(shProgram.uViewPosition, viewPos_WorldSpace);
     gl.uniform3fv(shProgram.uAmbientColor, [0.1, 0.1, 0.1]);
-    gl.uniform3fv(shProgram.uDiffuseColor, [1, 1, 1]);
-    gl.uniform3fv(shProgram.uSpecularColor, [1, 1, 1]);
     gl.uniform1f(shProgram.uShininess, 32.0);
     gl.uniform1i(shProgram.uIsLight, 0);
+
+    // Активація текстур
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, diffuseTexture);
+    gl.uniform1i(shProgram.uDiffuseTexture, 0);
+
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, specularTexture);
+    gl.uniform1i(shProgram.uSpecularTexture, 1);
+
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, normalTexture);
+    gl.uniform1i(shProgram.uNormalTexture, 2);
 
     surface.Draw();
 
@@ -128,13 +181,15 @@ function draw() {
     requestAnimationFrame(draw);
 }
 
-function initGL() {
+async function initGL() {
     let prog = createProgram(gl, vertexShaderSource, fragmentShaderSource);
     shProgram = new ShaderProgram('Phong', prog);
     shProgram.Use();
 
     shProgram.iAttribVertex = gl.getAttribLocation(prog, "vertex");
     shProgram.iAttribNormal = gl.getAttribLocation(prog, "normal");
+    shProgram.iAttribTexCoord = gl.getAttribLocation(prog, "texCoord");
+    shProgram.iAttribTangent = gl.getAttribLocation(prog, "tangent");
     shProgram.iModelMatrix = gl.getUniformLocation(prog, "ModelMatrix");
     shProgram.iViewMatrix = gl.getUniformLocation(prog, "ViewMatrix");
     shProgram.iProjectionMatrix = gl.getUniformLocation(prog, "ProjectionMatrix");
@@ -142,17 +197,20 @@ function initGL() {
     shProgram.uLightPosition = gl.getUniformLocation(prog, "uLightPosition");
     shProgram.uViewPosition = gl.getUniformLocation(prog, "uViewPosition");
     shProgram.uAmbientColor = gl.getUniformLocation(prog, "uAmbientColor");
-    shProgram.uDiffuseColor = gl.getUniformLocation(prog, "uDiffuseColor");
-    shProgram.uSpecularColor = gl.getUniformLocation(prog, "uSpecularColor");
     shProgram.uShininess = gl.getUniformLocation(prog, "uShininess");
     shProgram.uIsLight = gl.getUniformLocation(prog, "uIsLight");
+    shProgram.uDiffuseTexture = gl.getUniformLocation(prog, "uDiffuseTexture");
+    shProgram.uSpecularTexture = gl.getUniformLocation(prog, "uSpecularTexture");
+    shProgram.uNormalTexture = gl.getUniformLocation(prog, "uNormalTexture");
+
+    await loadTextures();
 
     surface = new Model('Surface');
     updateSurfaceData();
 
     lightSphere = new Model('LightSphere');
     let sphereData = createSphere(0.3, 12, 8);
-    lightSphere.BufferData(sphereData.verts, sphereData.normals, sphereData.indices);
+    lightSphere.BufferData(sphereData.verts, sphereData.normals, [], [], sphereData.indices);
 
     gl.enable(gl.DEPTH_TEST);
     
@@ -232,15 +290,14 @@ function updateSurfaceData() {
     let data = CreateSurfaceData(n, uSteps, vSteps);
     let indices = generateIndices(uSteps, vSteps);
     
-    surface.BufferData(data.vertices, data.normals, indices);
+    surface.BufferData(data.vertices, data.normals, data.texCoords, data.tangents, indices);
 }
 
 function updateSurface() {
     updateSurfaceData();
 }
 
-
-function init() {
+async function init() {
     canvasGlobal = document.getElementById("webglcanvas");
     gl = canvasGlobal.getContext("webgl");
     if (!gl) {
@@ -248,7 +305,7 @@ function init() {
         return;
     }
 
-    initGL();
+    await initGL();
     spaceball = new TrackballRotator(canvasGlobal, draw, 0);
 
     canvasGlobal.addEventListener("wheel", function(event) {
