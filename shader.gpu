@@ -8,6 +8,8 @@ uniform mat4 ModelMatrix;
 uniform mat4 ViewMatrix;
 uniform mat4 ProjectionMatrix;
 uniform mat3 NormalMatrix;
+uniform vec2 uTextureScale;
+uniform vec2 uPointPosition;
 
 varying vec3 vNormal;
 varying vec3 vWorldPos;
@@ -28,7 +30,9 @@ void main() {
     vNormal = N;
     vTangent = T;
     vBitangent = B;
-    vTexCoord = texCoord;
+    
+    // Texture scaling around specified point
+    vTexCoord = (texCoord - uPointPosition) * uTextureScale + uPointPosition;
     
     gl_Position = ProjectionMatrix * ViewMatrix * worldPos;
 }

@@ -90,6 +90,12 @@
             border-radius: 12px;
             box-shadow: 0 8px 25px rgba(0,0,0,0.6);
         }
+        .controls-grid {
+            display: grid;
+            grid-template-columns: auto auto;
+            gap: 20px;
+            align-items: start;
+        }
     </style>
     <script src="./Utils/trackball-rotator.js"></script>
     <script src="./Utils/m4.js"></script>
@@ -111,11 +117,21 @@
         <button onclick="updateSurface()">Update Surface</button>
     </div>
 
+<div class="controls-grid">
     <div class="control-group">
         <span>Light mode:</span>
         <label><input type="radio" name="lightMode" value="static" checked> Static </label>
         <label><input type="radio" name="lightMode" value="dynamic"> Dynamic </label>
     </div>
+
+    <div class="control-group">
+        <span>Texture Controls:</span>
+        <div>W/S - Move point along V</div>
+        <div>A/D - Move point along U</div>
+        <div>Q/E - Scale texture U</div>
+        <div>Z/X - Scale texture V</div>
+    </div>
+</div>
 
     <div id="canvas-holder">
         <canvas width="800" height="600" id="webglcanvas"></canvas>

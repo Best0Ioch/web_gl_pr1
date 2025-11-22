@@ -24,6 +24,13 @@ let lightNormalMatrix = new Float32Array([1, 0, 0, 0, 1, 0, 0, 0, 1]);
 // Текстури
 let diffuseTexture, specularTexture, normalTexture;
 
+// Texture scaling and point movement
+let textureScaleU = 1.0;
+let textureScaleV = 1.0;
+let pointU = 0.5;
+let pointV = 0.5;
+let pointSize = 0.05;
+
 function ShaderProgram(name, program) {
     this.name = name;
     this.prog = program;
@@ -44,6 +51,9 @@ function ShaderProgram(name, program) {
     this.uDiffuseTexture = -1;
     this.uSpecularTexture = -1;
     this.uNormalTexture = -1;
+    this.uTextureScale = -1;
+    this.uPointPosition = -1;
+    this.uPointSize = -1;
 
     this.Use = function() {
         gl.useProgram(this.prog);
@@ -155,6 +165,9 @@ function draw() {
     gl.uniform3fv(shProgram.uAmbientColor, [0.1, 0.1, 0.1]);
     gl.uniform1f(shProgram.uShininess, 32.0);
     gl.uniform1i(shProgram.uIsLight, 0);
+    gl.uniform2f(shProgram.uTextureScale, textureScaleU, textureScaleV);
+    gl.uniform2f(shProgram.uPointPosition, pointU, pointV);
+    gl.uniform1f(shProgram.uPointSize, pointSize);
 
     // Активація текстур
     gl.activeTexture(gl.TEXTURE0);
@@ -202,6 +215,9 @@ async function initGL() {
     shProgram.uDiffuseTexture = gl.getUniformLocation(prog, "uDiffuseTexture");
     shProgram.uSpecularTexture = gl.getUniformLocation(prog, "uSpecularTexture");
     shProgram.uNormalTexture = gl.getUniformLocation(prog, "uNormalTexture");
+    shProgram.uTextureScale = gl.getUniformLocation(prog, "uTextureScale");
+    shProgram.uPointPosition = gl.getUniformLocation(prog, "uPointPosition");
+    shProgram.uPointSize = gl.getUniformLocation(prog, "uPointSize");
 
     await loadTextures();
 
@@ -297,6 +313,46 @@ function updateSurface() {
     updateSurfaceData();
 }
 
+function handleKeyPress(event) {
+    const step = 0.02;
+    const scaleStep = 0.1;
+    
+    switch(event.key.toLowerCase()) {
+        case 'w':
+            pointV = Math.min(1.0, pointV + step);
+            break;
+        case 's':
+            pointV = Math.max(0.0, pointV - step);
+            break;
+        case 'a':
+            pointU = Math.max(0.0, pointU - step);
+            break;
+        case 'd':
+            pointU = Math.min(1.0, pointU + step);
+            break;
+        case 'q':
+            textureScaleU = Math.max(0.1, textureScaleU - scaleStep);
+            break;
+        case 'e':
+            textureScaleU += scaleStep;
+            break;
+        case 'z':
+            textureScaleV = Math.max(0.1, textureScaleV - scaleStep);
+            break;
+        case 'x':
+            textureScaleV += scaleStep;
+            break;
+    }
+    
+    updateTextureInfo();
+}
+
+function updateTextureInfo() {
+    document.getElementById('textureInfo').innerHTML = 
+        `Texture Scale: U=${textureScaleU.toFixed(1)}, V=${textureScaleV.toFixed(1)} | ` +
+        `Point Position: U=${pointU.toFixed(2)}, V=${pointV.toFixed(2)}`;
+}
+
 async function init() {
     canvasGlobal = document.getElementById("webglcanvas");
     gl = canvasGlobal.getContext("webgl");
@@ -313,6 +369,19 @@ async function init() {
         zoom += event.deltaY * 0.01;
         zoom = Math.min(-2, Math.max(-400, zoom));
     });
+
+    document.addEventListener('keydown', handleKeyPress);
+    
+    // Add texture info display
+    const controls = document.getElementById('controls');
+    const infoDiv = document.createElement('div');
+    infoDiv.id = 'textureInfo';
+    infoDiv.style.marginTop = '10px';
+    infoDiv.style.color = '#00e5ff';
+    infoDiv.style.fontWeight = 'bold';
+    controls.parentNode.insertBefore(infoDiv, controls.nextSibling);
+    
+    updateTextureInfo();
 
     draw();
 }
